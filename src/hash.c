@@ -12,11 +12,14 @@ struct hash{
     size_t insertados;
 };
 
+enum modo { BUSQUEDA, INSERCION};
+
 //estructura aux para insertar
 typedef struct h_insertar_aux{
     par_t* par;
     void** encontrado;
     bool insertado;
+    enum modo modo;
 }h_insertar_aux_t;
 
 // Función interna de hash (no visible desde afuera)
@@ -135,6 +138,7 @@ bool hash_insertar(hash_t *hash, char *clave, void *valor, void **encontrado){
     //    return (lista_agregar(lista_indicada,par_nuevo));
     //}
 
+    //se puede hacer tmb con lista_iterador (conviene para buscar elemento y saber si contiene x elemento)
     h_insertar_aux_t aux = {.par=par_nuevo, .encontrado = encontrado, .insertado=false};
     lista_con_cada_elemento(lista_indicada,insertar_no_vacio,&aux); 
     // puedo iterar la lista, y por cada uno ver si coincide la clave
