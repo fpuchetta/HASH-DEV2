@@ -1,5 +1,6 @@
 #include "hash.h"
 #include "lista.h"
+#include <string.h>
 
 typedef struct par{
     char* clave;
@@ -15,12 +16,13 @@ struct hash{
 enum modo { BUSQUEDA, INSERCION};
 
 //estructura aux para insertar
-typedef struct h_insertar_aux{
-    par_t* par;
-    void** encontrado;
-    bool insertado;
-    enum modo modo;
-}h_insertar_aux_t;
+typedef struct h_accionar_aux{
+    par_t* par_conocido;
+    par_t* par_encontrado;
+    void** valor_anterior;
+    bool accion_realizada;
+    enum modo modo_accion;
+}h_accionar_aux_t;
 
 // Función interna de hash (no visible desde afuera)
 static size_t funcion_hash(const char* str) {
@@ -88,13 +90,41 @@ par_t* inicializar_par(char *clave_a_insertar, void *valor_a_insertar){
     return p;
 }
 
-bool insertar_no_vacio(void *_p, void *aux){
-    par_t *par=_p;
-    h_insertar_aux_t* h_aux=aux;
+size_t hash_iterar_indice(lista_t* l, bool (*f)(char *, void *, void *), void *ctx){
+    lista_iterador_t *li=lista_iterador_crear(l);
+    if (!li) return 0;
 
-    if (strcmp(par->clave,h_aux->par->clave) == 0){
-        if (h_aux->encontrado) *(h_aux->encontrado)=par->valor;
-        par->valor=h_aux->par->valor;
+    size_t iterados=0;
+    bool cortar=false;
+
+    while (lista_iterador_hay_mas_elementos(li) && !cortar){
+        par_t* par_actual=lista_iterador_obtener_actual(li);
+        iterados++;
+        if (!f(par_actual->clave,par_actual->valor,ctx)){
+            cortar=true;
+        }
+        lista_iterador_siguiente(li);
+    }
+
+
+    lista_iterador_destruir(li);
+
+    return iterados;
+}
+
+bool recorrer_hasta(char *clave, void *valor, void *aux){
+    h_accionar_aux_t* h_aux=aux;
+
+    int comparacion = strcmp(clave,h_aux->par_conocido->clave);
+    if (comparacion == 0 && h_aux->modo_accion==INSERCION){
+        if (h_aux->valor_anterior) *(h_aux->valor_anterior)=valor;
+        valor=h_aux->par_conocido->valor;
+        h_aux->accion_realizada=true;
+        return false;
+    }else if (comparacion == 0 && h_aux->modo_accion==BUSQUEDA){
+        h_aux->par_encontrado->clave=clave;
+        h_aux->par_encontrado->valor=valor;
+        h_aux->accion_realizada=true;
         return false;
     }
 
@@ -130,24 +160,23 @@ bool hash_insertar(hash_t *hash, char *clave, void *valor, void **encontrado){
     if (!lista_indicada){
         hash->tabla[indice_tabla]=lista_crear();
         if (!hash->tabla[indice_tabla]){
+            par_destruir(par_nuevo);
             return false;
         }
         lista_indicada=hash->tabla[indice_tabla];
     }
-    //if (lista_cantidad(lista_indicada) == 0){
-    //    return (lista_agregar(lista_indicada,par_nuevo));
-    //}
 
+    h_accionar_aux_t aux = {.par_conocido=par_nuevo, .valor_anterior = encontrado, .accion_realizada=false, .modo_accion=INSERCION};
+    hash_iterar_indice(lista_indicada,recorrer_hasta,&aux);
     //se puede hacer tmb con lista_iterador (conviene para buscar elemento y saber si contiene x elemento)
-    h_insertar_aux_t aux = {.par=par_nuevo, .encontrado = encontrado, .insertado=false};
-    lista_con_cada_elemento(lista_indicada,insertar_no_vacio,&aux); 
+    //lista_con_cada_elemento(lista_indicada,recorrer_hasta,&aux); 
     // puedo iterar la lista, y por cada uno ver si coincide la clave
     // si la clave coincide entonces actualizo el valor,
     // de esa forma recorro una sola vez y puedo actualizar el valor en caso de que ya este
     // para eso armo una estructura auxiliar para
     // pasarle como parametro el "**encontrado", en caso de tener que guardarlo.
 
-    if (aux.insertado){
+    if (aux.accion_realizada){
         par_destruir(par_nuevo);
         hash->insertados++;
         return true;
@@ -167,17 +196,61 @@ bool hash_insertar(hash_t *hash, char *clave, void *valor, void **encontrado){
 /**
  * Busca el elemento asociado a la clave en la tabla.
  **/
-void *hash_buscar(hash_t *hash, char *clave);
+void *hash_buscar(hash_t *hash, char *clave){
+    if (!hash || !clave) return NULL;
+
+    size_t indice_tabla= funcion_hash(clave) % hash->capacidad;
+    lista_t* lista_indicada= hash->tabla[indice_tabla];
+
+    par_t par_buscado={.clave=clave};
+    h_accionar_aux_t aux={.par_conocido=&par_buscado, .accion_realizada=false, .modo_accion=BUSQUEDA};
+    hash_iterar_indice(lista_indicada,recorrer_hasta,&aux);
+
+    return aux.par_encontrado->valor;
+}
+
+
+
+int comparar_par(const void *_p1, const void *_p2){
+    par_t *p1=_p1;
+    par_t *p2=_p2;
+    
+    return (strcmp(p1->clave,p2->clave));
+}
+
 
 /**
  *Devuelve si la clave existe en la tabla o no
  */
-bool hash_contiene(hash_t *hash, char *clave);
+bool hash_contiene(hash_t *hash, char *clave){
+    if (!hash || !clave) return false;
+
+    lista_t* l=obtener_lista(hash,clave);
+
+    par_t aux={.clave=clave, .valor=NULL};
+    size_t indice=lista_buscar_posicion(l,&aux,comparar_par);
+
+    if (indice == -1)
+        return false;
+
+    return true;
+}
 
 /**
  * Quita el elemento asociado a la clave de la tabla y lo devuelve.
  */
-void *hash_quitar(hash_t *hash, char *clave);
+void *hash_quitar(hash_t *hash, char *clave){
+    if (!hash || !clave) return NULL;
+
+    lista_t *l= obtener_lista(hash,clave);
+
+    par_t par_aux={.clave=clave, .valor=NULL};
+    size_t indice=lista_buscar_posicion(l,&par_aux,comparar_par);
+
+    par_t* par_eliminado=lista_eliminar_elemento(l,indice);
+
+    return par_eliminado->valor;
+}
 
 /**
  * Itera cada elemento del hash y aplica la función f.
