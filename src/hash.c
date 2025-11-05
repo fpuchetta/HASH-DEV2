@@ -2,6 +2,7 @@
 #include "lista.h"
 #include <string.h>
 
+#define FACTOR_CARGA_MAX 0.7
 typedef struct par{
     char* clave;
     void* valor;
@@ -33,14 +34,15 @@ static size_t funcion_hash(const char* str) {
     return hash;
 }
 
-bool inicializar_tabla(hash_t* h){
+bool inicializar_tabla(lista_t** tabla, size_t capacidad){
     int indice=0;
     bool error=false;
-    while (indice<h->capacidad || !error){
-        h->tabla[indice]=lista_crear();
-        if (!h->tabla[indice]){
+    while (indice<capacidad && !error){
+        tabla[indice]=lista_crear();
+        if (!tabla[indice]){
             error=true;
         }
+        indice++;
     }
 
     return !error;
@@ -61,7 +63,7 @@ hash_t *hash_crear(size_t capacidad_inicial){
     h->tabla=calloc(capacidad_inicial,sizeof(lista_t*));
     if (!h->tabla) return NULL;
 
-    if (!inicializar_tabla(h)){
+    if (!inicializar_tabla(h, h->capacidad)){
         hash_destruir(h);
         return NULL;
     }
@@ -130,6 +132,94 @@ bool recorrer_hasta(char *clave, void *valor, void *aux){
 
     return true;
 }
+/*
+    Pre: La tabla pasada por parametro no debe ser NULL.
+
+    Post: Libera la memoria reservada para la tabla pasada por parametro.
+*/
+void destruir_tabla(lista_t **tabla, size_t capacidad){
+    for (size_t i=0; i<capacidad;i++){
+        if (tabla[i]){
+            lista_destruir(tabla[i]);
+        }
+    }
+    free(tabla);
+}
+
+/*
+    Pre: La tabla vieja y la tabla nueva no deben ser NULL.
+
+    Post: Copia los elementos de la tabla vieja en la tabla nueva.
+          Devuelve false en caso de error, devuelve true en caso contrario.
+*/
+bool clonar_tabla(lista_t **tabla_vieja, lista_t **tabla_nueva, size_t cap_vieja, size_t cap_nueva){
+    bool seguir = true;
+
+    for (size_t i = 0; i < cap_vieja; i++) {
+        if (seguir) {
+            lista_iterador_t *li = lista_iterador_crear(tabla_vieja[i]);
+            if (!li) seguir = false;
+
+            while (seguir && lista_iterador_hay_mas_elementos(li)) {
+                par_t *p = lista_iterador_obtener_actual(li);
+                size_t j = funcion_hash(p->clave) % cap_nueva;
+
+                if (!lista_agregar(tabla_nueva[j], p)) seguir = false;
+                else lista_iterador_siguiente(li);
+            }
+
+            if (li) lista_iterador_destruir(li);
+        }
+    }
+
+    return seguir;
+}
+
+/*
+	Pre: El hash pasado por parametro debe ser valido y haber sido creado previamente
+		 con "hash_crear" o con "hash_crear_con_funcion" 
+
+	Post: Devuelve true si se logro rehashear la tabla correctamente
+		  Devuelve false si no se logro rehashear, se vuelve a la tabla anterior.
+*/
+bool hash_rehash(hash_t *h, size_t nueva_cap)
+{
+    lista_t **nuevos = calloc(nueva_cap, sizeof(lista_t*));
+    if (!nuevos) return false;
+
+    if (!inicializar_tabla(nuevos, nueva_cap)) {
+        destruir_tabla(nuevos, nueva_cap);
+        return false;
+    }
+
+    bool seguir = clonar_tabla(h->tabla,nuevos,h->capacidad,nueva_cap);
+
+    if (!seguir) {
+        destruir_tabla(nuevos, nueva_cap);
+        return false;
+    }
+
+    for (size_t i = 0; i < h->capacidad; i++)
+        lista_destruir(h->tabla[i]);
+    free(h->tabla);
+
+    h->tabla     = nuevos;
+    h->capacidad = nueva_cap;
+
+    return true;
+}
+
+/*
+	Pre: El hash pasado por parametro debe haber sido creado previamente con
+		 "hash_crear" o "hash_crear_con_funcion", la clave debe ser un string valido
+		 y la posicion debe estar dentro de los rangos de la tabla.
+
+	Post: Devuelve true si se debe rehashear la tabla, devuelve falso en caso contrario.
+*/
+bool debe_rehashear(hash_t *h)
+{
+	return (double)(h->insertados + 1) / (double)h->capacidad > FACTOR_CARGA_MAX;
+}
 
 /**
  *
@@ -146,10 +236,12 @@ bool recorrer_hasta(char *clave, void *valor, void *aux){
  **/
 bool hash_insertar(hash_t *hash, char *clave, void *valor, void **encontrado){
     if (!hash || !clave) return false;
-    // falta ver: 
-    // factores de carga
-    // y redimensionar
-
+    
+	if (debe_rehashear(hash)) {
+        if (!hash_rehash(hash,hash->capacidad * 2))
+        return false;
+	}
+    
     size_t indice_tabla= funcion_hash(clave) % hash->capacidad;
 
     par_t* par_nuevo=inicializar_par(clave,valor);
@@ -168,17 +260,11 @@ bool hash_insertar(hash_t *hash, char *clave, void *valor, void **encontrado){
 
     h_accionar_aux_t aux = {.par_conocido=par_nuevo, .valor_anterior = encontrado, .accion_realizada=false, .modo_accion=INSERCION};
     hash_iterar_indice(lista_indicada,recorrer_hasta,&aux);
-    //se puede hacer tmb con lista_iterador (conviene para buscar elemento y saber si contiene x elemento)
-    //lista_con_cada_elemento(lista_indicada,recorrer_hasta,&aux); 
-    // puedo iterar la lista, y por cada uno ver si coincide la clave
-    // si la clave coincide entonces actualizo el valor,
-    // de esa forma recorro una sola vez y puedo actualizar el valor en caso de que ya este
-    // para eso armo una estructura auxiliar para
-    // pasarle como parametro el "**encontrado", en caso de tener que guardarlo.
 
     if (aux.accion_realizada){
+        //si se actualizo
+        //no sumo 1 a insertados
         par_destruir(par_nuevo);
-        hash->insertados++;
         return true;
     }
 
@@ -188,9 +274,11 @@ bool hash_insertar(hash_t *hash, char *clave, void *valor, void **encontrado){
         return false;
     }
 
+    //si no se actualizo
+    //sumo 1 a insertados
     hash->insertados++;
+    
     return agregado;
-
 }
 
 /**
