@@ -58,7 +58,8 @@ void hash_insertar_inserta_elemento_correctamente()
 	int valor = 42;
 	bool resultado = hash_insertar(hash, "clave1", &valor, NULL);
 	pa2m_afirmar(resultado, "Se puede insertar un elemento.");
-	pa2m_afirmar(hash_contiene(hash, "clave1"), "La clave insertada existe.");
+	pa2m_afirmar(hash_contiene(hash, "clave1"),
+		     "La clave insertada existe.");
 	hash_destruir(hash);
 }
 
@@ -85,7 +86,10 @@ void hash_insertar_clave_con_valor_null_y_luego_actualizar()
 		resultado,
 		"Se puede actualizar el valor NULL de una clave existente.");
 	void *dato = hash_buscar(hash, "clave_actualizar");
-	pa2m_afirmar(dato == &nuevo_valor, "El dato actualizado es correcto. (esperado :%i | obtenido: %i)",nuevo_valor,*(int*)dato);
+	pa2m_afirmar(
+		dato == &nuevo_valor,
+		"El dato actualizado es correcto. (esperado :%i | obtenido: %i)",
+		nuevo_valor, *(int *)dato);
 	hash_destruir(hash);
 }
 
@@ -99,7 +103,10 @@ void hash_insertar_actualiza_valor()
 	pa2m_afirmar(resultado,
 		     "Se puede actualizar el valor de una clave existente.");
 	void *dato = hash_buscar(hash, "clave");
-	pa2m_afirmar(dato == &valor2, "El dato actualizado es correcto. (esperado :%i | obtenido: %i)",valor2,*(int*)dato);
+	pa2m_afirmar(
+		dato == &valor2,
+		"El dato actualizado es correcto. (esperado :%i | obtenido: %i)",
+		valor2, *(int *)dato);
 	hash_destruir(hash);
 }
 
@@ -334,7 +341,7 @@ bool aux_contador_iterador(char *clave, void *dato, void *ctx)
 	return true;
 }
 
-bool aux_contador_iterador_hasta_limite(char *clave, void* dato, void *ctx)
+bool aux_contador_iterador_hasta_limite(char *clave, void *dato, void *ctx)
 {
 	size_t *contador = (size_t *)ctx;
 	(*contador)++;
@@ -351,8 +358,7 @@ void hash_iterar_itera_todos_los_elementos()
 		hash_insertar(hash, clave, (void *)(size_t)i, NULL);
 	}
 	size_t contador = 0;
-	size_t iterados =
-		hash_iterar(hash, aux_contador_iterador, &contador);
+	size_t iterados = hash_iterar(hash, aux_contador_iterador, &contador);
 	pa2m_afirmar(iterados == cantidad,
 		     "El iterador interno recorre todos los elementos.");
 	pa2m_afirmar(
@@ -371,8 +377,7 @@ void hash_iterar_itera_veces_correctas()
 		hash_insertar(hash, clave, (void *)(size_t)i, NULL);
 	}
 	size_t contador = 0;
-	size_t iterados =
-		hash_iterar(hash, aux_contador_iterador, &contador);
+	size_t iterados = hash_iterar(hash, aux_contador_iterador, &contador);
 	pa2m_afirmar(iterados == contador,
 		     "El iterador recorre la cantidad correcta de elementos.");
 	hash_destruir(hash);
@@ -382,8 +387,7 @@ void hash_iterar_hash_vacio_devuelve_cero()
 {
 	hash_t *hash = hash_crear(10);
 	size_t contador = 0;
-	size_t iterados =
-		hash_iterar(hash, aux_contador_iterador, &contador);
+	size_t iterados = hash_iterar(hash, aux_contador_iterador, &contador);
 	pa2m_afirmar(iterados == 0, "Iterar un hash vacio devuelve 0.");
 	hash_destruir(hash);
 }
@@ -398,8 +402,7 @@ void hash_iterar_con_aux_valido_itera_correctamente()
 		hash_insertar(hash, clave, (void *)(size_t)i, NULL);
 	}
 	size_t contador = 0;
-	size_t iterados =
-		hash_iterar(hash, aux_contador_iterador, &contador);
+	size_t iterados = hash_iterar(hash, aux_contador_iterador, &contador);
 	pa2m_afirmar(iterados == cantidad,
 		     "Iterar con aux valido funciona correctamente.");
 	hash_destruir(hash);
@@ -408,8 +411,7 @@ void hash_iterar_con_aux_valido_itera_correctamente()
 void hash_iterar_devuelve_cero_con_hash_nulo()
 {
 	size_t contador = 0;
-	size_t iterados =
-		hash_iterar(NULL, aux_contador_iterador, &contador);
+	size_t iterados = hash_iterar(NULL, aux_contador_iterador, &contador);
 	pa2m_afirmar(iterados == 0, "Iterar con hash NULL devuelve 0.");
 }
 
@@ -441,8 +443,8 @@ void hash_iterar_itera_hasta_corte_con_aux_nulo()
 		hash_insertar(hash, clave, (void *)(size_t)i, NULL);
 	}
 	size_t contador = 0;
-	size_t iterados = hash_iterar(
-		hash, aux_contador_iterador_hasta_limite, &contador);
+	size_t iterados = hash_iterar(hash, aux_contador_iterador_hasta_limite,
+				      &contador);
 	pa2m_afirmar(iterados == 3,
 		     "El iterador corta correctamente al llegar al limite.");
 	hash_destruir(hash);
@@ -734,7 +736,8 @@ void hash_insercion_y_eliminacion_mezclada()
 
 	pa2m_afirmar(insertadas > 0, "Se insertaron N claves.");
 	pa2m_afirmar(eliminadas > 0, "Se eliminaron claves intercaladamente.");
-	pa2m_afirmar(hash_cantidad(hash) > 0, "La tabla tiene claves al final.");
+	pa2m_afirmar(hash_cantidad(hash) > 0,
+		     "La tabla tiene claves al final.");
 
 	hash_destruir(hash);
 }
